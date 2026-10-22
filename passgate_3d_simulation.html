@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PassGate 3D Simulation - Technovision 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <!-- Three.js 3D Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #050811;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: #f1f5f9;
+    }
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+    .font-display {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glass-card {
+      background: rgba(11, 19, 36, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+    .glass-card-subtle {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background: rgba(56, 189, 248, 0.8);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 10;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.9);
+      transition: all 0.15s ease;
+    }
+    #crosshair.active-target {
+      width: 14px;
+      height: 14px;
+      background: rgba(52, 211, 153, 0.9);
+      box-shadow: 0 0 16px rgba(52, 211, 153, 1);
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.4);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="relative w-full h-full">
+
+  <!-- 3D WebGL Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Center Crosshair -->
+  <div id="crosshair"></div>
+
+  <!-- Top-Left Branding & Status Badge -->
+  <div class="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-none">
+    <div class="glass-card px-4 py-2.5 rounded-xl flex items-center gap-3 shadow-lg pointer-events-auto">
+      <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400/50 flex items-center justify-center text-sky-400">
+        <i class="fa-solid fa-shield-halved text-sm"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-display font-bold text-sm text-white tracking-wide">PASSGATE</span>
+          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/30">STA-NET 3D</span>
+        </div>
+        <p class="text-[11px] text-slate-300">Elysium Celestial Heights • 3-Node Simulation</p>
+      </div>
+    </div>
+
+    <!-- Active Credential Token Pill -->
+    <div id="active-token-card" class="glass-card px-4 py-3 rounded-xl flex flex-col gap-1.5 shadow-lg max-w-xs pointer-events-auto">
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider">ACTIVE PASS</span>
+        <span id="token-status-pill" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">NO CREDENTIAL</span>
+      </div>
+      <div class="flex items-baseline justify-between pt-1 border-t border-slate-700/60">
+        <span class="text-xs text-slate-300 font-mono">OTP: <b id="badge-otp" class="text-sky-300 font-bold text-sm">----</b></span>
+        <span class="text-xs text-slate-300 font-mono">TARGET: <b id="badge-target" class="text-emerald-300 font-bold">None</b></span>
+      </div>
+      <div class="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+        <span>Headcount: <b id="badge-headcount" class="text-slate-200">0</b></span>
+        <button id="btn-quick-revoke" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition disabled:opacity-40 disabled:pointer-events-none" disabled>
+          REVOKE
+        </button>
+      </div>
+    </div>
+  </div>
+
+      <!-- Bottom-Left Key Controls Helper -->
+      <div class="absolute bottom-4 left-4 z-20 glass-card px-4 py-2.5 rounded-xl flex items-center gap-4 text-xs font-mono text-slate-300 pointer-events-none">
+        <div class="flex items-center gap-1.5">
+          <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700 font-bold">WASD / ↑←↓→</span>
+          <span>Walk</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700 font-bold">Shift</span>
+          <span>Sprint</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 font-bold">E</span>
+          <span>Interact (&lt;2.8m)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="px-1.5 py-0.5 rounded bg-slate-800 text-rose-400 border border-slate-700 font-bold">Mouse</span>
+          <span>Look</span>
+        </div>
+      </div>
+
+      <!-- Click to Play Overlay -->
+      <div id="click-to-play-screen" class="absolute inset-0 z-40 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-4 select-none cursor-pointer">
+        <div class="glass-card px-8 py-7 rounded-2xl flex flex-col items-center gap-3 text-center border-2 border-sky-400/60 shadow-2xl max-w-md w-full relative z-10" onclick="event.stopPropagation()">
+          <button id="btn-dismiss-play-overlay-x" type="button" class="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center text-sm transition border border-slate-700 cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+          <div class="w-14 h-14 rounded-full bg-sky-500/20 text-sky-400 border border-sky-400/60 flex items-center justify-center text-2xl mb-1">
+            <i class="fa-solid fa-gamepad"></i>
+          </div>
+          <h2 class="font-display font-bold text-2xl text-white">Enter Campus Simulation</h2>
+          <p class="text-xs text-slate-300 leading-relaxed font-mono">
+            <b class="text-sky-300">W / S</b> to Walk Forward / Back<br>
+            <b class="text-sky-300">A / D</b> to Strafe Left / Right<br>
+            <b class="text-sky-300">Mouse Movement</b> to Look Around<br>
+            <b class="text-amber-300">[E]</b> to Interact at Gate Kiosk &amp; Intercoms
+          </p>
+          <button id="btn-dismiss-play-overlay" type="button" class="mt-2 w-full py-3 px-6 rounded-xl font-mono font-bold text-xs bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-lg shadow-sky-500/30 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-play"></i>
+            <span>START WALKING (ESC / CLICK)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Twist Interactive Controls -->
+      <div class="pt-1 flex flex-col gap-1.5">
+        <button id="btn-broadcast-revoke" class="w-full py-1.5 px-3 rounded-lg text-xs font-mono font-bold bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/50 flex items-center justify-center gap-2 transition active:scale-95">
+          <i class="fa-solid fa-ban"></i>
+          <span>TEST INSTANT REVOCATION (ACK)</span>
+        </button>
+        <button id="btn-toggle-failure" class="w-full py-1.5 px-3 rounded-lg text-xs font-mono font-bold bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/50 flex items-center justify-center gap-2 transition active:scale-95">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span id="btn-toggle-failure-text">SIMULATE WING BETA SENSOR CUT</span>
+        </button>
+      </div>
+
+      <!-- Live Heartbeat / ACK Feed -->
+      <div class="mt-1 bg-black/60 rounded-lg p-2 border border-slate-800 max-h-24 overflow-y-auto">
+        <div class="text-[10px] text-slate-400 font-mono mb-1 font-semibold flex items-center justify-between">
+          <span>EVENT & ACK LOG</span>
+          <span class="text-sky-400">HEARTBEAT: 2.5s</span>
+        </div>
+        <div id="ack-log-feed" class="flex flex-col gap-1 text-[10px] font-mono text-slate-300 leading-tight">
+          <span class="text-slate-400">[SYSTEM READY] STA-Net mesh operational.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Waypoint Transit Guidance Banner -->
+  <div id="nav-banner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-20 glass-card px-5 py-2.5 rounded-2xl flex items-center gap-3 border border-sky-400/50 shadow-xl pointer-events-none transition-all">
+    <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-400/40 flex items-center justify-center text-xs">
+      <i class="fa-solid fa-location-crosshairs animate-pulse"></i>
+    </div>
+    <div class="flex flex-col">
+      <span id="nav-step" class="text-[11px] font-mono font-bold text-sky-300 uppercase tracking-wider">WAYPOINT 01 • TARGET: MAIN GATE</span>
+      <span id="nav-message" class="text-xs font-medium text-slate-200">Approach the perimeter kiosk and press [E] to check in.</span>
+    </div>
+  </div>
+
+  <!-- Bottom-Left Key Controls Helper -->
+  <div class="absolute bottom-4 left-4 z-20 glass-card px-4 py-2.5 rounded-xl flex items-center gap-4 text-xs font-mono text-slate-300 pointer-events-none">
+    <div class="flex items-center gap-1.5">
+      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700 font-bold">WASD / ↑←↓→</span>
+      <span>Walk</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700 font-bold">Shift</span>
+      <span>Sprint</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 font-bold">E</span>
+      <span>Interact (&lt;2.8m)</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <span class="px-1.5 py-0.5 rounded bg-slate-800 text-rose-400 border border-slate-700 font-bold">Click & Drag</span>
+      <span>Look</span>
+    </div>
+  </div>
+
+  <!-- Click to Play Overlay -->
+  <div id="click-to-play-screen" class="absolute inset-0 z-30 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center cursor-pointer transition-opacity duration-200">
+    <div class="glass-card px-8 py-6 rounded-2xl flex flex-col items-center gap-3 text-center border border-sky-400/50 shadow-2xl max-w-md pointer-events-none">
+      <div class="w-14 h-14 rounded-full bg-sky-500/20 text-sky-400 border border-sky-400/60 flex items-center justify-center text-2xl mb-1 animate-pulse">
+        <i class="fa-solid fa-gamepad"></i>
+      </div>
+      <h2 class="font-display font-bold text-2xl text-white">Click Canvas to Control Character</h2>
+      <p class="text-xs text-slate-300 leading-relaxed font-mono">
+        <b class="text-sky-300">WASD / Arrow Keys</b> to Walk • <b class="text-sky-300">Shift</b> to Sprint<br>
+        <b class="text-sky-300">Mouse Move / Drag</b> to Look Around<br>
+        <b class="text-amber-300">[E]</b> to Interact at Gate Kiosk &amp; Intercoms<br>
+        Press <b class="text-rose-300">ESC</b> to release cursor / close dialogs
+      </p>
+      <span class="mt-2 text-xs font-mono font-bold text-sky-400 bg-sky-500/10 px-4 py-1.5 rounded-full border border-sky-400/30">
+        CLICK ANYWHERE TO START
+      </span>
+    </div>
+  </div>
+
+  <!-- In-Game Interaction Overlay [E] Prompt (Only shown when distance <= 2.8m) -->
+  <div id="interaction-prompt" class="hidden absolute top-[58%] left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 glass-card px-5 py-2.5 rounded-full shadow-2xl border border-sky-400/50 pointer-events-none transition-all duration-150">
+    <span class="w-7 h-7 rounded-lg bg-sky-500/30 text-sky-300 font-bold border border-sky-400/60 flex items-center justify-center font-mono text-sm animate-bounce">E</span>
+    <span id="interaction-text" class="text-sm font-semibold text-slate-100 tracking-wide">Interact with Terminal</span>
+  </div>
+
+  <!-- MODAL 1: CHECKPOINT 1 - MAIN GATE KIOSK -->
+  <div id="modal-gate-kiosk" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <!-- Clickable outer backdrop area that closes modal -->
+    <div class="modal-backdrop-dismiss absolute inset-0 cursor-pointer"></div>
+
+    <div class="glass-card max-w-lg w-full p-6 rounded-2xl flex flex-col gap-4 border border-sky-400/40 shadow-2xl relative z-10">
+      <button type="button" class="modal-close-btn absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white flex items-center justify-center text-base transition cursor-pointer border border-slate-700">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 text-lg">
+          <i class="fa-solid fa-id-badge"></i>
+        </div>
+        <div>
+          <h3 class="font-display font-bold text-xl text-white">Perimeter Check-In Kiosk</h3>
+          <p class="text-xs text-sky-400/90 font-mono">STA Checkpoint 01 • Main Entrance Gate</p>
+        </div>
+      </div>
+
+      <!-- Form Inputs -->
+      <div class="flex flex-col gap-3.5 pt-2">
+        <div>
+          <label class="block text-xs font-mono font-bold text-slate-300 mb-1.5 uppercase">Select Destination Wing</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" class="kiosk-wing-btn active py-2 rounded-lg font-mono font-bold text-xs bg-sky-500 text-white border border-sky-400 transition" data-wing="Wing Alpha">
+              Wing Alpha
+            </button>
+            <button type="button" class="kiosk-wing-btn py-2 rounded-lg font-mono font-bold text-xs bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition" data-wing="Wing Beta">
+              Wing Beta
+            </button>
+            <button type="button" class="kiosk-wing-btn py-2 rounded-lg font-mono font-bold text-xs bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition" data-wing="Wing Gamma">
+              Wing Gamma
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-mono font-bold text-slate-300 mb-1.5 uppercase">Select Target Flat</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" class="kiosk-flat-btn active py-2 rounded-lg font-mono font-bold text-xs bg-sky-500 text-white border border-sky-400 transition" data-flat="Flat 101">
+              Flat 101
+            </button>
+            <button type="button" class="kiosk-flat-btn py-2 rounded-lg font-mono font-bold text-xs bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition" data-flat="Flat 102">
+              Flat 102
+            </button>
+            <button type="button" class="kiosk-flat-btn py-2 rounded-lg font-mono font-bold text-xs bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition" data-flat="Flat 103">
+              Flat 103
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-mono font-bold text-slate-300 mb-1.5 uppercase">Declared Party Headcount (Anti-Tailgating)</label>
+          <div class="flex items-center gap-3">
+            <select id="kiosk-headcount" class="bg-slate-800 border border-slate-700 text-white text-xs font-mono rounded-lg px-3 py-2 w-full focus:outline-none focus:border-sky-400">
+              <option value="1">1 Person (Solo / Courier)</option>
+              <option value="2">2 Persons (Guest Pair)</option>
+              <option value="3">3 Persons (Family Visit)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between gap-3">
+        <button type="button" class="modal-cancel-btn py-2 px-4 rounded-xl font-mono text-xs text-slate-400 hover:text-white transition">Cancel (Esc)</button>
+        <button id="btn-generate-otp" class="py-2.5 px-5 rounded-xl font-mono font-bold text-xs bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-lg shadow-sky-500/25 transition active:scale-95 flex items-center gap-2">
+          <i class="fa-solid fa-key"></i>
+          <span>ISSUE OTP & OPEN MAIN GATE</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CHECKPOINT 2 & 3 - VERIFIER KEYPAD -->
+  <div id="modal-verifier" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <!-- Clickable outer backdrop area that closes modal -->
+    <div class="modal-backdrop-dismiss absolute inset-0 cursor-pointer"></div>
+
+    <div class="glass-card max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 border border-sky-400/40 shadow-2xl relative z-10">
+      <button type="button" class="modal-close-btn absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white flex items-center justify-center text-base transition cursor-pointer border border-slate-700">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-3">
+        <div id="verifier-icon-box" class="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 text-lg">
+          <i class="fa-solid fa-door-closed" id="verifier-icon"></i>
+        </div>
+        <div>
+          <h3 id="verifier-title" class="font-display font-bold text-xl text-white">Wing Alpha Interlock Gate</h3>
+          <p id="verifier-subtitle" class="text-xs text-sky-400/90 font-mono">STA Checkpoint 02 • Building Lobby</p>
+        </div>
+      </div>
+
+      <!-- Result Banner (Hidden until test) -->
+      <div id="verifier-result-banner" class="hidden p-3 rounded-xl text-xs font-mono flex items-center gap-2.5">
+        <i id="verifier-banner-icon" class="fa-solid fa-circle-check text-base"></i>
+        <span id="verifier-banner-text">STATUS MESSAGE</span>
+      </div>
+
+      <!-- OTP Display & Numeric Entry -->
+      <div class="flex flex-col gap-3">
+        <div class="relative">
+          <input type="text" id="otp-input" maxlength="4" placeholder="••••" class="w-full text-center tracking-[1em] text-2xl font-mono font-bold bg-slate-900 border-2 border-slate-700 focus:border-sky-400 rounded-xl py-3 text-white focus:outline-none transition" />
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-500" id="otp-char-count">0/4</span>
+        </div>
+
+        <!-- Voice OTP Speech Recognition Module -->
+        <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-xs font-mono text-slate-300">
+            <i class="fa-solid fa-microphone-lines text-sky-400" id="mic-indicator-icon"></i>
+            <span id="voice-module-label">Voice Input (Courier Mode)</span>
+          </div>
+          <button id="btn-voice-otp" type="button" class="py-1 px-3 rounded-lg text-xs font-mono font-bold bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/40 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-microphone text-[11px]" id="mic-btn-icon"></i>
+            <span id="mic-btn-text">Speak OTP</span>
+          </button>
+        </div>
+        <p id="voice-status-feedback" class="text-[11px] font-mono text-slate-400 italic">Click Speak OTP and clearly say your 4-digit code (e.g., "5 2 9 1").</p>
+
+        <!-- Numeric Keypad Grid -->
+        <div class="grid grid-cols-3 gap-2 pt-1 font-mono">
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="1">1</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="2">2</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="3">3</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="4">4</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="5">5</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="6">6</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="7">7</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="8">8</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="9">9</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 font-bold text-xs transition border border-rose-800/40" id="btn-numpad-clear">CLR</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition" data-num="0">0</button>
+          <button class="numpad-btn py-2.5 rounded-lg bg-amber-950/40 hover:bg-amber-900/40 text-amber-300 font-bold text-xs transition border border-amber-800/40" id="btn-numpad-back"><i class="fa-solid fa-delete-left"></i></button>
+        </div>
+      </div>
+
+      <!-- Doorstep Push-to-Exit Egress Feature -->
+      <div id="egress-section" class="hidden pt-2 border-t border-slate-700/60">
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-person-walking-dashed-line-arrow-right text-emerald-400"></i>
+            <span class="text-xs font-mono text-emerald-300">Push-to-Exit Switch</span>
+          </div>
+          <button id="btn-push-exit" class="text-[11px] font-mono font-bold px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition">
+            PRESS TO EXIT
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="pt-2 border-t border-slate-700/60 flex items-center justify-between gap-3">
+        <button type="button" class="modal-cancel-btn py-2 px-4 rounded-xl font-mono text-xs text-slate-400 hover:text-white transition">Cancel (Esc)</button>
+        <button id="btn-verify-submit" class="py-2.5 px-6 rounded-xl font-mono font-bold text-xs bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/25 transition active:scale-95 flex items-center gap-2">
+          <i class="fa-solid fa-shield-check"></i>
+          <span>VERIFY TRANSIT CREDENTIAL</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* -------------------------------------------------------------
+       AUDIO SYNTHESIZER (Pure Web Audio API - Zero External URLs)
+       ------------------------------------------------------------- */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      }
+      playChimeSuccess() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, now); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.65);
+      }
+      playBuzzerDenied() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.setValueAtTime(110, now + 0.15);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      }
+      playSirenAlarm() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.linearRampToValueAtTime(850, now + 0.25);
+        osc.frequency.linearRampToValueAtTime(400, now + 0.5);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.75);
+      }
+      playGateSlide() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(90, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 1.2);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 1.2);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 1.25);
+      }
+    }
+    const sound = new SoundEngine();
+
+    /* -------------------------------------------------------------
+       STATE MANAGEMENT
+       ------------------------------------------------------------- */
+    const State = {
+      activeToken: null, // { otp, wing, flat, headcount, status: 'ACTIVE'|'IN_TRANSIT'|'COMPLETED'|'REVOKED' }
+      currentInteractiveTarget: null,
+      isBetaNodeFailing: false,
+      nodes: {
+        node1: { name: 'Main Gate Kiosk', status: 'ONLINE', elId: 'status-node-1' },
+        node2: { name: 'Wing Alpha Gate', status: 'ONLINE', elId: 'status-node-2' },
+        node3: { name: 'Wing Beta Gate',  status: 'ONLINE', elId: 'status-node-3' },
+        node4: { name: 'Wing Gamma Gate', status: 'ONLINE', elId: 'status-node-4' }
+      }
+    };
+
+    /* -------------------------------------------------------------
+       THREE.JS SCENE SETUP & ENVIRONMENT
+       ------------------------------------------------------------- */
+    const canvas = document.getElementById('game-canvas');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060c18);
+    scene.fog = new THREE.FogExp2(0x060c18, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 300);
+    camera.position.set(0, 1.7, 24); // Start right outside the main perimeter entrance
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Procedural Starfield Dome
+    const starCount = 1800;
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+
+    for (let i = 0; i < starCount; i++) {
+      // Distribute stars across upper celestial hemisphere
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(Math.random() * 0.95 + 0.05); // Keep above ground horizon
+      const radius = 220 + Math.random() * 30;
+
+      starPos[i * 3]     = radius * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = radius * Math.cos(phi);
+      starPos[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+
+      // Star color variation (cool blue-white to subtle warm amber)
+      const tint = Math.random();
+      if (tint > 0.8) {
+        starColors[i * 3] = 0.6; starColors[i * 3 + 1] = 0.85; starColors[i * 3 + 2] = 1.0; // Blue star
+      } else if (tint > 0.6) {
+        starColors[i * 3] = 1.0; starColors[i * 3 + 1] = 0.95; starColors[i * 3 + 2] = 0.8; // Warm star
+      } else {
+        starColors[i * 3] = 0.95; starColors[i * 3 + 1] = 0.98; starColors[i * 3 + 2] = 1.0; // White star
+      }
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+    const starMat = new THREE.PointsMaterial({
+      size: 1.4,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+      sizeAttenuation: true
+    });
+    const starField = new THREE.Points(starGeo, starMat);
+    scene.add(starField);
+
+    // Glowing 3D Celestial Moon
+    const moonGeo = new THREE.SphereGeometry(6.5, 32, 32);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xf1f5f9 });
+    const moonMesh = new THREE.Mesh(moonGeo, moonMat);
+    moonMesh.position.set(45, 95, -75);
+    scene.add(moonMesh);
+
+    // Luminous Lunar Halo Sprite
+    const haloCanvas = document.createElement('canvas');
+    haloCanvas.width = 128;
+    haloCanvas.height = 128;
+    const haloCtx = haloCanvas.getContext('2d');
+    const grad = haloCtx.createRadialGradient(64, 64, 10, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0.55)');
+    grad.addColorStop(0.3, 'rgba(30, 58, 138, 0.25)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    haloCtx.fillStyle = grad;
+    haloCtx.fillRect(0, 0, 128, 128);
+
+    const haloTexture = new THREE.CanvasTexture(haloCanvas);
+    const haloMat = new THREE.SpriteMaterial({ map: haloTexture, transparent: true, blending: THREE.AdditiveBlending, opacity: 0.9 });
+    const moonHalo = new THREE.Sprite(haloMat);
+    moonHalo.scale.set(40, 40, 1);
+    moonHalo.position.copy(moonMesh.position);
+    scene.add(moonHalo);
+
+    // Ambient and Directional Sun/Moon Lighting
+    const ambientLight = new THREE.AmbientLight(0x131f38, 1.4);
+    scene.add(ambientLight);
+
+    const moonLight = new THREE.DirectionalLight(0x7dd3fc, 0.9);
+    moonLight.position.set(45, 95, -75);
+    moonLight.castShadow = true;
+    moonLight.shadow.mapSize.width = 2048;
+    moonLight.shadow.mapSize.height = 2048;
+    scene.add(moonLight);
+
+    // Warm Gate Pavilion Spotlights
+    const gateSpot = new THREE.SpotLight(0xfef08a, 2.5, 30, Math.PI / 4, 0.4);
+    gateSpot.position.set(0, 7, 10);
+    gateSpot.target.position.set(0, 0, 8);
+    scene.add(gateSpot);
+    scene.add(gateSpot.target);
+
+    // Ground Plane with Paver Visuals
+    const groundGeo = new THREE.PlaneGeometry(240, 300);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x090f1d, roughness: 0.85, metalness: 0.1 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Central Cobblestone / Asphalt Avenue
+    const roadGeo = new THREE.PlaneGeometry(14, 260);
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x141e33, roughness: 0.7, metalness: 0.2 });
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(0, 0.02, -40);
+    road.receiveShadow = true;
+    scene.add(road);
+
+    // Solid Perimeter Collision Boxes Array
+    const colliders = [];
+
+    // Helper: Create AABB Obstacles
+    function addObstacle(minX, maxX, minZ, maxZ) {
+      colliders.push({ minX, maxX, minZ, maxZ });
+    }
+
+    // Streetlamps Along the Way
+    function createStreetLamp(x, z) {
+      const poleGeo = new THREE.CylinderGeometry(0.08, 0.1, 4.5, 8);
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+      const pole = new THREE.Mesh(poleGeo, poleMat);
+      pole.position.set(x, 2.25, z);
+      scene.add(pole);
+
+      const bulbGeo = new THREE.SphereGeometry(0.2, 12, 12);
+      const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+      const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+      bulb.position.set(x, 4.4, z);
+      scene.add(bulb);
+
+      const light = new THREE.PointLight(0xfef08a, 1.4, 16, 2);
+      light.position.set(x, 4.2, z);
+      scene.add(light);
+    }
+    [-18, -48, -78, -108].forEach(z => {
+      createStreetLamp(-7.8, z);
+      createStreetLamp(7.8, z);
+    });
+
+    /* -------------------------------------------------------------
+       PERIMETER BOUNDARY WALLS & GUARD PAVILION
+       ------------------------------------------------------------- */
+    // Left Boundary Wall
+    const wallLeftGeo = new THREE.BoxGeometry(35, 3.8, 1.2);
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x1a263d, roughness: 0.8 });
+    const wallLeft = new THREE.Mesh(wallLeftGeo, wallMat);
+    wallLeft.position.set(-23, 1.9, 10);
+    scene.add(wallLeft);
+    addObstacle(-40.5, -5.5, 9.4, 10.6);
+
+    // Right Boundary Wall
+    const wallRight = new THREE.Mesh(wallLeftGeo, wallMat);
+    wallRight.position.set(23, 1.9, 10);
+    scene.add(wallRight);
+    addObstacle(5.5, 40.5, 9.4, 10.6);
+
+    // Full Left Perimeter Lateral Wall (Z from +10 down to -125)
+    const sideWallGeo = new THREE.BoxGeometry(1.2, 3.8, 136);
+    const wallPerimeterLeft = new THREE.Mesh(sideWallGeo, wallMat);
+    wallPerimeterLeft.position.set(-40, 1.9, -58);
+    scene.add(wallPerimeterLeft);
+    addObstacle(-41.0, -39.0, -126, 10.5);
+
+    // Full Right Perimeter Lateral Wall (Z from +10 down to -125)
+    const wallPerimeterRight = new THREE.Mesh(sideWallGeo, wallMat);
+    wallPerimeterRight.position.set(40, 1.9, -58);
+    scene.add(wallPerimeterRight);
+    addObstacle(39.0, 41.0, -126, 10.5);
+
+    // Full Rear Boundary Wall (X from -40 to +40 at Z = -125)
+    const rearWallGeo = new THREE.BoxGeometry(81.2, 3.8, 1.2);
+    const wallPerimeterRear = new THREE.Mesh(rearWallGeo, wallMat);
+    wallPerimeterRear.position.set(0, 1.9, -125);
+    scene.add(wallPerimeterRear);
+    addObstacle(-41.0, 41.0, -126.0, -124.0);
+
+    // Grand Stone Entrance Pillars flanking the gate
+    const pillarGeo = new THREE.BoxGeometry(1.6, 5.0, 1.6);
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.4 });
+    
+    const pillarLeft = new THREE.Mesh(pillarGeo, pillarMat);
+    pillarLeft.position.set(-4.8, 2.5, 10);
+    scene.add(pillarLeft);
+    addObstacle(-5.6, -4.0, 9.2, 10.8);
+
+    const pillarRight = new THREE.Mesh(pillarGeo, pillarMat);
+    pillarRight.position.set(4.8, 2.5, 10);
+    scene.add(pillarRight);
+    addObstacle(4.0, 5.6, 9.2, 10.8);
+
+    // Pillar Beacon Lights
+    const beaconLeft = new THREE.PointLight(0x38bdf8, 1.2, 10);
+    beaconLeft.position.set(-4.8, 5.2, 10);
+    scene.add(beaconLeft);
+
+    const beaconRight = new THREE.PointLight(0x38bdf8, 1.2, 10);
+    beaconRight.position.set(4.8, 5.2, 10);
+    scene.add(beaconRight);
+
+    // Security Guardhouse
+    const guardhouseGeo = new THREE.BoxGeometry(4.5, 3.6, 5);
+    const guardhouseMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5, metalness: 0.4 });
+    const guardhouse = new THREE.Mesh(guardhouseGeo, guardhouseMat);
+    guardhouse.position.set(-6, 1.8, 10);
+    scene.add(guardhouse);
+    addObstacle(-8.25, -3.75, 7.5, 12.5);
+
+    // Tinted Guardhouse Windows
+    const windowGeo = new THREE.PlaneGeometry(3.2, 1.4);
+    const windowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45 });
+    const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+    windowMesh.position.set(-6, 2.0, 12.52);
+    scene.add(windowMesh);
+
+    // Overhead Security Canopy
+    const canopyGeo = new THREE.BoxGeometry(16, 0.4, 6);
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.6 });
+    const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+    canopy.position.set(0, 4.4, 10);
+    scene.add(canopy);
+
+    // Motorized Sliding Perimeter Gate Leaves
+    const gateLeafGeo = new THREE.BoxGeometry(3.6, 3.2, 0.25);
+    const gateMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.8, roughness: 0.2, transparent: true, opacity: 0.85 });
+    
+    const gateLeftLeaf = new THREE.Mesh(gateLeafGeo, gateMat);
+    gateLeftLeaf.position.set(-1.8, 1.6, 10);
+    scene.add(gateLeftLeaf);
+
+    const gateRightLeaf = new THREE.Mesh(gateLeafGeo, gateMat);
+    gateRightLeaf.position.set(1.8, 1.6, 10);
+    scene.add(gateRightLeaf);
+
+    // Gate Light Strip (Red = Locked, Green = Authorized)
+    const gateStripGeo = new THREE.BoxGeometry(7.2, 0.1, 0.3);
+    const gateStripMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+    const gateStrip = new THREE.Mesh(gateStripGeo, gateStripMat);
+    gateStrip.position.set(0, 3.25, 10);
+    scene.add(gateStrip);
+
+    // Main Gate Controller State
+    let lastBreachAlertTime = 0;
+    const mainGateController = {
+      isOpen: false,
+      leftClosedX: -1.8,
+      rightClosedX: 1.8,
+      leftOpenX: -4.8,
+      rightOpenX: 4.8,
+      openGate() {
+        this.isOpen = true;
+        sound.playGateSlide();
+        gateStrip.material.color.setHex(0x10b981);
+      },
+      closeGate() {
+        this.isOpen = false;
+        sound.playGateSlide();
+        gateStrip.material.color.setHex(0xef4444);
+      },
+      update(delta) {
+        const speed = delta * 3.5;
+        if (this.isOpen) {
+          gateLeftLeaf.position.x = THREE.MathUtils.lerp(gateLeftLeaf.position.x, this.leftOpenX, speed);
+          gateRightLeaf.position.x = THREE.MathUtils.lerp(gateRightLeaf.position.x, this.rightOpenX, speed);
+        } else {
+          gateLeftLeaf.position.x = THREE.MathUtils.lerp(gateLeftLeaf.position.x, this.leftClosedX, speed);
+          gateRightLeaf.position.x = THREE.MathUtils.lerp(gateRightLeaf.position.x, this.rightClosedX, speed);
+        }
+      }
+    };
+    // Initialize closed gate state
+    mainGateController.closeGate();
+
+    // Triggered when someone tries to bypass or walk past closed gate without valid OTP
+    function triggerPerimeterBreachAlarm() {
+      const now = performance.now();
+      if (now - lastBreachAlertTime < 2200) return; // Debounce so alarm doesn't overlap excessively
+      lastBreachAlertTime = now;
+
+      sound.playSirenAlarm();
+
+      // Show persistent on-screen warning banner
+      let breachBanner = document.getElementById('breach-warning-banner');
+      if (!breachBanner) {
+        breachBanner = document.createElement('div');
+        breachBanner.id = 'breach-warning-banner';
+        breachBanner.className = 'fixed top-20 left-1/2 -translate-x-1/2 z-50 glass-card px-6 py-3.5 rounded-2xl flex items-center gap-3 border-2 border-rose-500 shadow-2xl bg-rose-950/90 text-rose-200 font-mono text-sm font-bold tracking-wide animate-pulse pointer-events-none';
+        document.body.appendChild(breachBanner);
+      }
+      breachBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-400 text-xl animate-bounce"></i><span>PERIMETER BREACH DETECTED: Unauthorized entry! Register at Kiosk.</span>';
+      breachBanner.style.display = 'flex';
+
+      // Log into STA-Net ACK Feed
+      logAck('🚨 <b class="text-rose-400 font-bold">[BREACH ALARM]</b> Optical beam broken at Main Gate without valid OTP transit token!');
+
+      // Hide after 3 seconds
+      setTimeout(() => {
+        if (breachBanner) breachBanner.style.display = 'none';
+      }, 3000);
+    }
+
+    // Interactive Registry & Kiosk State Variables
+    const interactiveObjects = [];
+    let selectedKioskWing = 'Wing Alpha';
+    let selectedKioskFlat = 'Flat 101';
+
+    // Check-In Kiosk Stand (Checkpoint 1)
+    function createCheckInKiosk(x, y, z) {
+      const standGeo = new THREE.BoxGeometry(0.7, 1.3, 0.4);
+      const standMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6 });
+      const stand = new THREE.Mesh(standGeo, standMat);
+      stand.position.set(x, y + 0.65, z);
+      scene.add(stand);
+      addObstacle(x - 0.4, x + 0.4, z - 0.3, z + 0.3);
+
+      // Angled Touch Screen
+      const screenGeo = new THREE.BoxGeometry(0.65, 0.45, 0.08);
+      const screenMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
+      const screen = new THREE.Mesh(screenGeo, screenMat);
+      screen.position.set(x, y + 1.25, z + 0.1);
+      screen.rotation.x = -0.3;
+      scene.add(screen);
+
+      // Dedicated visual pulsing prompt light
+      const kioskLight = new THREE.PointLight(0x38bdf8, 1.2, 4);
+      kioskLight.position.set(x, y + 1.5, z);
+      scene.add(kioskLight);
+
+      interactiveObjects.push({
+        position: new THREE.Vector3(x, y + 1.0, z),
+        promptText: 'Press <b class="text-sky-300 font-mono font-bold">[E]</b> to Check In at Main Gate Kiosk',
+        action: function() { openGateKioskModal(); }
+      });
+    }
+    createCheckInKiosk(3.2, 0, 11.2);
+
+    /* -------------------------------------------------------------
+       WING RESIDENTIAL BUILDINGS (Alpha, Beta, Gamma)
+       WITH ACCESSIBLE INTERIOR LOBBIES, STAIRS & UPPER LANDINGS
+       ------------------------------------------------------------- */
+    const wingsData = [
+      { name: 'Wing Alpha', x: -18, z: -18, color: 0x38bdf8, hexStr: '#38bdf8' },
+      { name: 'Wing Beta',  x:  18, z: -52, color: 0xa855f7, hexStr: '#a855f7' },
+      { name: 'Wing Gamma', x: -18, z: -86, color: 0xf59e0b, hexStr: '#f59e0b' }
+    ];
+
+    const wingGateNodes = {};
+
+    // Helper: Generate procedural canvas texture for doorplates & signage
+    function makeSignCanvasTexture(titleText, subtitleText, accentColor) {
+      const cvs = document.createElement('canvas');
+      cvs.width = 512;
+      cvs.height = 192;
+      const ctx = cvs.getContext('2d');
+
+      ctx.fillStyle = '#0b1329';
+      ctx.fillRect(0, 0, 512, 192);
+
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = accentColor;
+      ctx.strokeRect(4, 4, 504, 184);
+
+      ctx.fillStyle = accentColor;
+      ctx.font = 'bold 36px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(titleText.toUpperCase(), 256, 75);
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 54px "JetBrains Mono", monospace';
+      ctx.fillText(subtitleText, 256, 145);
+
+      return new THREE.CanvasTexture(cvs);
+    }
+
+    wingsData.forEach(function(w) {
+      const bldgMat = new THREE.MeshStandardMaterial({ color: 0x0c1527, roughness: 0.65, metalness: 0.25 });
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x162035, roughness: 0.8 });
+      const stairMat = new THREE.MeshStandardMaterial({ color: 0x22304d, roughness: 0.6, metalness: 0.4 });
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0x101a2e, roughness: 0.7 });
+
+      // 1. Hollow Outer Building Shell
+      // Back Wall
+      const backWall = new THREE.Mesh(new THREE.BoxGeometry(16, 12, 1), wallMat);
+      backWall.position.set(w.x, 6, w.z - 7.5);
+      scene.add(backWall);
+      addObstacle(w.x - 8, w.x + 8, w.z - 8, w.z - 7.0);
+
+      // Left Wall
+      const leftWall = new THREE.Mesh(new THREE.BoxGeometry(1, 12, 16), wallMat);
+      leftWall.position.set(w.x - 7.5, 6, w.z);
+      scene.add(leftWall);
+      addObstacle(w.x - 8, w.x - 7.0, w.z - 8, w.z + 8);
+
+      // Right Wall
+      const rightWall = new THREE.Mesh(new THREE.BoxGeometry(1, 12, 16), wallMat);
+      rightWall.position.set(w.x + 7.5, 6, w.z);
+      scene.add(rightWall);
+      addObstacle(w.x + 7.0, w.x + 8, w.z - 8, w.z + 8);
+
+      // Roof / Ceiling
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(16, 1, 16), bldgMat);
+      roof.position.set(w.x, 12, w.z);
+      scene.add(roof);
+
+      // Front Facade Walls (Flanking entrance doorway)
+      const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(6.2, 12, 1), wallMat);
+      frontLeft.position.set(w.x - 4.9, 6, w.z + 7.5);
+      scene.add(frontLeft);
+      addObstacle(w.x - 8.0, w.x - 1.8, w.z + 7.0, w.z + 8.0);
+
+      const frontRight = new THREE.Mesh(new THREE.BoxGeometry(6.2, 12, 1), wallMat);
+      frontRight.position.set(w.x + 4.9, 6, w.z + 7.5);
+      scene.add(frontRight);
+      addObstacle(w.x + 1.8, w.x + 8.0, w.z + 7.0, w.z + 8.0);
+
+      // Entrance Canopy Over Door
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.4, 3.5), bldgMat);
+      canopy.position.set(w.x, 4.4, w.z + 8.8);
+      scene.add(canopy);
+
+      // Large Wing Facade Signboard
+      const facadeSignTex = makeSignCanvasTexture("RESIDENTIAL TOWER", w.name, w.hexStr);
+      const facadeSign = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.6, 1.35),
+        new THREE.MeshBasicMaterial({ map: facadeSignTex })
+      );
+      facadeSign.position.set(w.x, 5.5, w.z + 8.05);
+      scene.add(facadeSign);
+
+      // 2. Interior Ground Foyer Floor & Lighting
+      const groundFoyer = new THREE.Mesh(new THREE.BoxGeometry(14, 0.2, 14), floorMat);
+      groundFoyer.position.set(w.x, 0.1, w.z);
+      scene.add(groundFoyer);
+
+      const foyerLight = new THREE.PointLight(w.color, 1.4, 18, 2);
+      foyerLight.position.set(w.x, 3.8, w.z + 2.0);
+      scene.add(foyerLight);
+
+      // 3. Motorized Lobby Security Barrier Gate (Turnstile / Interlock)
+      const gateDoorGeo = new THREE.BoxGeometry(3.4, 3.0, 0.2);
+      const gateDoorMat = new THREE.MeshStandardMaterial({
+        color: w.color,
+        transparent: true,
+        opacity: 0.85,
+        metalness: 0.8,
+        roughness: 0.2
+      });
+      const gateDoor = new THREE.Mesh(gateDoorGeo, gateDoorMat);
+      gateDoor.position.set(w.x, 1.5, w.z + 7.5);
+      scene.add(gateDoor);
+
+      // Lobby Interlock Terminal Post
+      const postGeo = new THREE.BoxGeometry(0.35, 1.3, 0.35);
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8 });
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(w.x + 2.2, 0.65, w.z + 8.3);
+      scene.add(post);
+
+      const postScreen = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.1), new THREE.MeshBasicMaterial({ color: w.color }));
+      postScreen.position.set(w.x + 2.2, 1.25, w.z + 8.3);
+      scene.add(postScreen);
+
+      interactiveObjects.push({
+        position: new THREE.Vector3(w.x + 2.2, 1.1, w.z + 8.3),
+        promptText: "Press <b class=\"text-sky-300 font-mono font-bold\">[E]</b> to verify OTP at <b>" + w.name + " Lobby Interlock</b>",
+        action: function() { openVerifierModal('WING_LOBBY', w.name); }
+      });
+
+      wingGateNodes[w.name] = {
+        doorMesh: gateDoor,
+        initialY: 1.5,
+        isOpen: false,
+        obstacleMinX: w.x - 1.8,
+        obstacleMaxX: w.x + 1.8,
+        obstacleMinZ: w.z + 7.2,
+        obstacleMaxZ: w.z + 7.8,
+        update: function(delta) {
+          const targetY = this.isOpen ? 4.5 : this.initialY;
+          this.doorMesh.position.y = THREE.MathUtils.lerp(this.doorMesh.position.y, targetY, delta * 4.0);
+        }
+      };
+
+      // 4. Interior Flight of Stairs leading to Upper Residential Landing
+      const numSteps = 8;
+      const stepWidth = 3.6;
+      const totalRise = 2.4;
+      const stepRise = totalRise / numSteps;
+      const stepRun = 0.55;
+      const stairStartX = w.x - 4.5;
+      const stairStartZ = w.z + 4.5;
+
+      for (let s = 0; s < numSteps; s++) {
+        const step = new THREE.Mesh(new THREE.BoxGeometry(stepWidth, stepRise * (s + 1), stepRun), stairMat);
+        step.position.set(stairStartX, (stepRise * (s + 1)) / 2, stairStartZ - s * stepRun);
+        scene.add(step);
+      }
+
+      // 5. Upper 1st Floor Gallery Landing (Y = 2.4)
+      const landingFloor = new THREE.Mesh(new THREE.BoxGeometry(14, 0.3, 10), floorMat);
+      landingFloor.position.set(w.x, 2.4, w.z - 2.0);
+      scene.add(landingFloor);
+
+      // Safety Railing along the landing void
+      const railGeo = new THREE.BoxGeometry(7.0, 1.0, 0.1);
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.3 });
+      const rail = new THREE.Mesh(railGeo, railMat);
+      rail.position.set(w.x + 2.5, 3.0, w.z + 3.0);
+      scene.add(rail);
+
+      // Upper Corridor Light
+      const upperLight = new THREE.PointLight(0xfffbeb, 1.2, 14, 2);
+      upperLight.position.set(w.x, 5.0, w.z - 2.0);
+      scene.add(upperLight);
+
+      // 6. Three Apartment Residences (Flats 101, 102, 103) along the upper hallway
+      const flatConfigs = [
+        { flatNo: 'Flat 101', posX: w.x - 4.2, posZ: w.z - 6.5, rotY: 0 },
+        { flatNo: 'Flat 102', posX: w.x,       posZ: w.z - 6.5, rotY: 0 },
+        { flatNo: 'Flat 103', posX: w.x + 4.2, posZ: w.z - 6.5, rotY: 0 }
+      ];
+
+      flatConfigs.forEach(function(fc) {
+        // Wooden Apartment Door Leaf
+        const doorLeaf = new THREE.Mesh(
+          new THREE.BoxGeometry(1.8, 2.8, 0.15),
+          new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 0.7 })
+        );
+        doorLeaf.position.set(fc.posX, 3.8, fc.posZ);
+        scene.add(doorLeaf);
+
+        // Door Frame Surround
+        const frame = new THREE.Mesh(
+          new THREE.BoxGeometry(2.1, 3.0, 0.1),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5 })
+        );
+        frame.position.set(fc.posX, 3.9, fc.posZ - 0.02);
+        scene.add(frame);
+
+        // Lit Doorplate Signboard displaying WING & FLAT NUMBER
+        const plateTex = makeSignCanvasTexture(w.name, fc.flatNo, w.hexStr);
+        const plateMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.2, 0.45),
+          new THREE.MeshBasicMaterial({ map: plateTex })
+        );
+        plateMesh.position.set(fc.posX, 5.5, fc.posZ + 0.1);
+        scene.add(plateMesh);
+
+        // Doorstep Intercom & Calling Bell Box
+        const bellUnit = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.45, 0.15),
+          new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7 })
+        );
+        bellUnit.position.set(fc.posX + 1.15, 3.8, fc.posZ + 0.1);
+        scene.add(bellUnit);
+
+        const bellLight = new THREE.PointLight(w.color, 0.6, 3);
+        bellLight.position.set(fc.posX + 1.15, 4.0, fc.posZ + 0.2);
+        scene.add(bellLight);
+
+        // Checkpoint 3 Interactive Hook
+        interactiveObjects.push({
+          position: new THREE.Vector3(fc.posX + 1.15, 3.8, fc.posZ + 0.3),
+          promptText: "Press <b class=\"text-sky-300 font-mono font-bold\">[E]</b> to ring calling station at <b>" + w.name + " - " + fc.flatNo + "</b>",
+          action: function() { openVerifierModal('DOORSTEP', w.name, fc.flatNo); }
+        });
+      });
+    });
+
+    /* -------------------------------------------------------------
+       FIRST PERSON CONTROLS & CAMERA DYNAMICS
+       ------------------------------------------------------------- */
+    const keys = { forward: false, backward: false, left: false, right: false, shift: false };
+    let isPointerLocked = false;
+    let isMouseDownOnCanvas = false;
+    let previousMouseX = 0;
+    let previousMouseY = 0;
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    const clickToPlayOverlay = document.getElementById('click-to-play-screen');
+    const promptEl = document.getElementById('interaction-prompt');
+    const promptTextEl = document.getElementById('interaction-text');
+    const crosshairEl = document.getElementById('crosshair');
+
+    // Safe Pointer Lock Request Wrapper
+    function safelyRequestPointerLock() {
+      try {
+        if (canvas.requestPointerLock) {
+          const promise = canvas.requestPointerLock();
+          if (promise && promise.catch) {
+            promise.catch(() => {});
+          }
+        }
+      } catch (err) {}
+    }
+
+    // Engagement handlers: Click to focus & engage controls
+    function activateControls() {
+      sound.init();
+      safelyRequestPointerLock();
+      hidePlayOverlay();
+      window.focus();
+    }
+
+    function hidePlayOverlay() {
+      const overlays = document.querySelectorAll('#click-to-play-screen');
+      overlays.forEach(el => {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+      });
+    }
+
+    function showPlayOverlay() {
+      const el = document.getElementById('click-to-play-screen');
+      if (el && !isModalOpen()) {
+        el.classList.remove('hidden');
+        el.style.display = 'flex';
+        el.style.pointerEvents = 'auto';
+      }
+    }
+
+    // Direct button listeners to dismiss the screen immediately
+    const btnDismissPlay = document.getElementById('btn-dismiss-play-overlay');
+    if (btnDismissPlay) {
+      btnDismissPlay.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        activateControls();
+      });
+    }
+
+    const btnDismissPlayX = document.getElementById('btn-dismiss-play-overlay-x');
+    if (btnDismissPlayX) {
+      btnDismissPlayX.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        activateControls();
+      });
+    }
+
+    if (clickToPlayOverlay) {
+      clickToPlayOverlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activateControls();
+      });
+    }
+
+    // Mouse drag-look state on canvas
+    canvas.addEventListener('mousedown', (e) => {
+      if (isModalOpen()) return;
+      isMouseDownOnCanvas = true;
+      previousMouseX = e.clientX;
+      previousMouseY = e.clientY;
+      activateControls();
+    });
+
+    window.addEventListener('mouseup', () => {
+      isMouseDownOnCanvas = false;
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+      isPointerLocked = (document.pointerLockElement === canvas);
+      if (isPointerLocked) {
+        hidePlayOverlay();
+      }
+    });
+
+    // Helper: Check if any modal is currently visible
+    function isModalOpen() {
+      const modal1 = document.getElementById('modal-gate-kiosk');
+      const modal2 = document.getElementById('modal-verifier');
+      return (modal1 && !modal1.classList.contains('hidden')) ||
+             (modal2 && !modal2.classList.contains('hidden'));
+    }
+
+    // Universal 360 Look Handler (Pointer Lock OR Drag-to-Look)
+    function rotateCamera(deltaX, deltaY, sensitivity = 0.0024) {
+      euler.y -= deltaX * sensitivity;
+      euler.x -= deltaY * sensitivity;
+      euler.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, euler.x));
+      camera.quaternion.setFromEuler(euler);
+    }
+
+    // Pure FPS Mouse Movement + Fallback Drag-Look
+    document.addEventListener('mousemove', (e) => {
+      if (isModalOpen()) return;
+
+      if (isPointerLocked) {
+        // Native locked FPS mouse look
+        const movementX = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
+        const movementY = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
+        rotateCamera(movementX, movementY, 0.0024);
+      } else if (isMouseDownOnCanvas) {
+        // Reliable fallback: drag-look across 360 degrees when pointer lock is unavailable in iframes
+        const deltaX = e.clientX - previousMouseX;
+        const deltaY = e.clientY - previousMouseY;
+        previousMouseX = e.clientX;
+        previousMouseY = e.clientY;
+        rotateCamera(deltaX, deltaY, 0.0035);
+      }
+    });
+
+    // Touch 360 Look for Touchscreens / Trackpads
+    let touchStartX = 0;
+    let touchStartY = 0;
+    canvas.addEventListener('touchstart', (e) => {
+      if (isModalOpen() || e.touches.length === 0) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      hidePlayOverlay();
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (isModalOpen() || e.touches.length === 0) return;
+      const touchX = e.touches[0].clientX;
+      const touchY = e.touches[0].clientY;
+      const deltaX = touchX - touchStartX;
+      const deltaY = touchY - touchStartY;
+      touchStartX = touchX;
+      touchStartY = touchY;
+      rotateCamera(deltaX, deltaY, 0.004);
+    }, { passive: true });
+
+    // Keyboard Key Tracker (WASD + Arrows + Shift + ESC)
+    window.addEventListener('keydown', (e) => {
+      // ESC or Space key immediately dismisses the overlay and starts walking
+      const overlays = document.querySelectorAll('#click-to-play-screen');
+      let overlayVisible = false;
+      overlays.forEach(ov => {
+        if (ov.style.display !== 'none' && !ov.classList.contains('hidden')) {
+          overlayVisible = true;
+        }
+      });
+
+      if (overlayVisible) {
+        if (e.key === 'Escape' || e.code === 'Escape' || e.key === ' ' || e.code === 'Space' || e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          activateControls();
+          return;
+        }
+      }
+
+      // ESC key priority: close modal if open
+      if (e.key === 'Escape' || e.code === 'Escape') {
+        if (isModalOpen()) {
+          closeAllModals();
+          return;
+        }
+      }
+
+      // Ignore movement keys while typing into text inputs
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+        return;
+      }
+
+      const code = e.code;
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      if (code === 'KeyW' || key === 'w' || code === 'ArrowUp') { keys.forward = true; e.preventDefault(); }
+      if (code === 'KeyS' || key === 's' || code === 'ArrowDown') { keys.backward = true; e.preventDefault(); }
+      if (code === 'KeyA' || key === 'a' || code === 'ArrowLeft') { keys.left = true; e.preventDefault(); }
+      if (code === 'KeyD' || key === 'd' || code === 'ArrowRight') { keys.right = true; e.preventDefault(); }
+      if (code === 'ShiftLeft' || code === 'ShiftRight' || key === 'shift') keys.shift = true;
+
+      // Interaction Key [E] - STRICT PROXIMITY CHECK (<= 2.8 meters)
+      if (code === 'KeyE' || key === 'e') {
+        if (isModalOpen()) return;
+        if (State.currentInteractiveTarget) {
+          const dist = camera.position.distanceTo(State.currentInteractiveTarget.position);
+          if (dist <= 2.8) {
+            State.currentInteractiveTarget.action();
+          }
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const code = e.code;
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      if (code === 'KeyW' || key === 'w' || code === 'ArrowUp') keys.forward = false;
+      if (code === 'KeyS' || key === 's' || code === 'ArrowDown') keys.backward = false;
+      if (code === 'KeyA' || key === 'a' || code === 'ArrowLeft') keys.left = false;
+      if (code === 'KeyD' || key === 'd' || code === 'ArrowRight') keys.right = false;
+      if (code === 'ShiftLeft' || code === 'ShiftRight' || key === 'shift') keys.shift = false;
+    });
+
+    // Helper: Collision Check with AABB Boxes
+    function checkCollision(px, pz, radius = 0.5) {
+      // 1. Dynamic check against the closed perimeter gate barrier
+      if (!mainGateController.isOpen) {
+        if (px + radius > -4.0 && px - radius < 4.0 &&
+            pz + radius > 9.3 && pz - radius < 10.7) {
+          triggerPerimeterBreachAlarm();
+          return true; // Hard physical block
+        }
+      }
+
+      // 2. Dynamic check against closed wing lobby gates
+      for (const wingName in wingGateNodes) {
+        const wg = wingGateNodes[wingName];
+        if (!wg.isOpen) {
+          if (px + radius > wg.obstacleMinX && px - radius < wg.obstacleMaxX &&
+              pz + radius > wg.obstacleMinZ && pz - radius < wg.obstacleMaxZ) {
+            return true; // Lobby gate blocks access to stairs & flats
+          }
+        }
+      }
+
+      // 3. Static colliders (walls, buildings, guardhouse, kiosks)
+      for (let i = 0; i < colliders.length; i++) {
+        const c = colliders[i];
+        if (px + radius > c.minX && px - radius < c.maxX &&
+            pz + radius > c.minZ && pz - radius < c.maxZ) {
+          return true; // Collision detected
+        }
+      }
+      return false;
+    }
+
+    /* -------------------------------------------------------------
+       UI CONTROLS & MODAL DIALOGS
+       ------------------------------------------------------------- */
+    const modalGateKiosk = document.getElementById('modal-gate-kiosk');
+    const modalVerifier = document.getElementById('modal-verifier');
+    const badgeOtp = document.getElementById('badge-otp');
+    const badgeTarget = document.getElementById('badge-target');
+    const badgeHeadcount = document.getElementById('badge-headcount');
+    const tokenStatusPill = document.getElementById('token-status-pill');
+    const ackLogFeed = document.getElementById('ack-log-feed');
+    const navBanner = document.getElementById('nav-banner');
+    const navStep = document.getElementById('nav-step');
+    const navMessage = document.getElementById('nav-message');
+
+    // Open Main Gate Kiosk Modal (Guaranteed clean launch)
+    function openGateKioskModal() {
+      try { if (document.exitPointerLock) document.exitPointerLock(); } catch(e) {}
+      isPointerLocked = false;
+      isMouseDownOnCanvas = false;
+      hidePlayOverlay();
+
+      modalVerifier.classList.add('hidden');
+      modalGateKiosk.classList.remove('hidden');
+    }
+
+    // Kiosk Wing Selector
+    document.querySelectorAll('.kiosk-wing-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.kiosk-wing-btn').forEach(b => {
+          b.className = "kiosk-wing-btn py-2 rounded-lg font-mono font-bold text-xs bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition cursor-pointer";
+        });
+        btn.className = "kiosk-wing-btn active py-2 rounded-lg font-mono font-bold text-xs bg-sky-500 text-white border border-sky-400 transition cursor-pointer";
+        selectedKioskWing = btn.getAttribute('data-wing');
+      });
+    });
+
+    // Kiosk Flat Selector
+    document.querySelectorAll('.kiosk-flat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.kiosk-flat-btn').forEach(b => {
+          b.className = "kiosk-flat-btn py-2 rounded-lg font-mono font-bold text-xs bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 transition cursor-pointer";
+        });
+        btn.className = "kiosk-flat-btn active py-2 rounded-lg font-mono font-bold text-xs bg-sky-500 text-white border border-sky-400 transition cursor-pointer";
+        selectedKioskFlat = btn.getAttribute('data-flat');
+      });
+    });
+
+    // Close Modal Function
+    function closeAllModals() {
+      modalGateKiosk.classList.add('hidden');
+      modalVerifier.classList.add('hidden');
+      if (!isPointerLocked) {
+        clickToPlayOverlay.classList.remove('hidden');
+      }
+    }
+
+    // Modal close button listeners (all X buttons and cancel buttons)
+    document.querySelectorAll('.modal-close-btn, .modal-cancel-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAllModals();
+      });
+    });
+
+    // Outer backdrop area dismissal listeners
+    document.querySelectorAll('.modal-backdrop-dismiss').forEach(backdrop => {
+      backdrop.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAllModals();
+      });
+    });
+
+    // Close modals on clicking directly on the root modal overlay container
+    [modalGateKiosk, modalVerifier].forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeAllModals();
+        }
+      });
+    });
+
+    // Global escape key listener guaranteeing instant modal dismissal
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.code === 'Escape' || e.code === 'Space' || e.key === ' ') {
+        if (clickToPlayOverlay && clickToPlayOverlay.style.display !== 'none' && !clickToPlayOverlay.classList.contains('hidden')) {
+          e.preventDefault();
+          e.stopPropagation();
+          hidePlayOverlay();
+          activateControls();
+          return;
+        }
+      }
+
+      if (e.key === 'Escape' || e.code === 'Escape') {
+        if (isModalOpen()) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeAllModals();
+        }
+      }
+    }, true); // useCapture: true guarantees this catches first
+
+    /* -------------------------------------------------------------
+       CHECKPOINT 1: KIOSK OTP GENERATION & MAIN GATE DISPATCH
+       ------------------------------------------------------------- */
+    document.getElementById('btn-generate-otp').addEventListener('click', () => {
+      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      const headcount = document.getElementById('kiosk-headcount').value;
+
+      State.activeToken = {
+        otp: generatedOtp,
+        wing: selectedKioskWing,
+        flat: selectedKioskFlat,
+        headcount: headcount,
+        status: 'ACTIVE'
+      };
+
+      sound.playChimeSuccess();
+      updateBadgeUI();
+      closeAllModals();
+
+      // Slide Open Main Gate
+      mainGateController.openGate();
+
+      logAck(`[NODE 01: GATE] OTP ${generatedOtp} issued for ${selectedKioskWing} - ${selectedKioskFlat}`);
+
+      // Show Nav Banner if present
+      if (navBanner) {
+        navBanner.classList.remove('hidden');
+        if (navStep) navStep.innerText = `WAYPOINT 02 • TARGET: ${selectedKioskWing.toUpperCase()}`;
+        if (navMessage) navMessage.innerText = `Main gate opened. Proceed to ${selectedKioskWing} Lobby. Your OTP: ${generatedOtp}`;
+      }
+    });
+
+    function updateBadgeUI() {
+      if (!State.activeToken) {
+        badgeOtp.innerText = "----";
+        badgeTarget.innerText = "None";
+        badgeHeadcount.innerText = "0";
+        tokenStatusPill.innerText = "NO CREDENTIAL";
+        tokenStatusPill.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700";
+        document.getElementById('btn-quick-revoke').disabled = true;
+        return;
+      }
+
+      badgeOtp.innerText = State.activeToken.otp;
+      badgeTarget.innerText = `${State.activeToken.wing} • ${State.activeToken.flat}`;
+      badgeHeadcount.innerText = State.activeToken.headcount;
+      document.getElementById('btn-quick-revoke').disabled = false;
+
+      if (State.activeToken.status === 'ACTIVE' || State.activeToken.status === 'IN_TRANSIT') {
+        tokenStatusPill.innerText = State.activeToken.status;
+        tokenStatusPill.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+      } else if (State.activeToken.status === 'REVOKED') {
+        tokenStatusPill.innerText = "REVOKED";
+        tokenStatusPill.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse";
+      } else if (State.activeToken.status === 'COMPLETED') {
+        tokenStatusPill.innerText = "COMPLETED";
+        tokenStatusPill.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40";
+      }
+    }
+
+    /* -------------------------------------------------------------
+       VERIFIER MODAL (Checkpoints 2 & 3)
+       ------------------------------------------------------------- */
+    let currentVerifierContext = null; // { mode: 'WING_LOBBY' | 'DOORSTEP', wing, flat }
+    const otpInputField = document.getElementById('otp-input');
+
+    otpInputField.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+      document.getElementById('otp-char-count').innerText = `${e.target.value.length}/4`;
+    });
+
+    // Numpad button listeners
+    document.querySelectorAll('.numpad-btn[data-num]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (otpInputField.value.length < 4) {
+          otpInputField.value += btn.getAttribute('data-num');
+          document.getElementById('otp-char-count').innerText = `${otpInputField.value.length}/4`;
+        }
+      });
+    });
+
+    document.getElementById('btn-numpad-clear').addEventListener('click', () => {
+      otpInputField.value = '';
+      document.getElementById('otp-char-count').innerText = "0/4";
+    });
+
+    document.getElementById('btn-numpad-back').addEventListener('click', () => {
+      otpInputField.value = otpInputField.value.slice(0, -1);
+      document.getElementById('otp-char-count').innerText = `${otpInputField.value.length}/4`;
+    });
+
+    function openVerifierModal(mode, wing, flat = null) {
+      try { if (document.exitPointerLock) document.exitPointerLock(); } catch(e) {}
+      isPointerLocked = false;
+      clickToPlayOverlay.classList.add('hidden');
+
+      currentVerifierContext = { mode, wing, flat };
+      otpInputField.value = '';
+      document.getElementById('otp-char-count').innerText = "0/4";
+      document.getElementById('verifier-result-banner').classList.add('hidden');
+      document.getElementById('voice-status-feedback').innerText = "Courier feature: Click button and clearly speak the 4 numbers";
+
+      if (mode === 'WING_LOBBY') {
+        document.getElementById('verifier-title').innerText = `${wing} Lobby Gate`;
+        document.getElementById('verifier-subtitle').innerText = "STA Checkpoint 02 • Building Ingress Interlock";
+        document.getElementById('egress-section').classList.add('hidden');
+      } else {
+        document.getElementById('verifier-title').innerText = `${wing} • ${flat}`;
+        document.getElementById('verifier-subtitle').innerText = "STA Checkpoint 03 • Destination Doorstep Station";
+        document.getElementById('egress-section').classList.remove('hidden');
+      }
+
+      modalVerifier.classList.remove('hidden');
+    }
+
+    // Push-to-Exit switch inside doorstep
+    document.getElementById('btn-push-exit').addEventListener('click', () => {
+      sound.playChimeSuccess();
+      const banner = document.getElementById('verifier-result-banner');
+      banner.classList.remove('hidden');
+      banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+      document.getElementById('verifier-banner-icon').className = "fa-solid fa-person-walking text-base text-emerald-400";
+      document.getElementById('verifier-banner-text').innerText = "ONE-TOUCH EGRESS: Exit relay pulsed. Safe travels!";
+      setTimeout(closeAllModals, 1200);
+    });
+
+    // Checkpoint 2 and Checkpoint 3 OTP Verification Evaluator
+    function evaluateVerification(enteredOtp) {
+      const banner = document.getElementById('verifier-result-banner');
+      const bannerText = document.getElementById('verifier-banner-text');
+      const bannerIcon = document.getElementById('verifier-banner-icon');
+      banner.classList.remove('hidden');
+
+      if (!State.activeToken) {
+        sound.playBuzzerDenied();
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-rose-500/20 text-rose-300 border border-rose-500/40";
+        bannerIcon.className = "fa-solid fa-circle-xmark text-base text-rose-400";
+        bannerText.innerText = "ACCESS DENIED: No active transit token. Check in at Main Gate Kiosk first.";
+        return;
+      }
+
+      // Checkpoint 3 requires Checkpoint 2 (Lobby) to be validated first
+      if (currentVerifierContext.mode === 'DOORSTEP' && State.activeToken.status !== 'IN_TRANSIT') {
+        sound.playBuzzerDenied();
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-rose-500/20 text-rose-300 border border-rose-500/40";
+        bannerIcon.className = "fa-solid fa-hand text-base text-rose-400";
+        bannerText.innerText = "SEQUENCE VIOLATION: You must authenticate at the Ground Lobby interlock before accessing flats!";
+        logAck(`[ORDER OF ACCESS VIOLATION] Doorstep attempted before lobby verification at ${currentVerifierContext.wing}`);
+        return;
+      }
+
+      if (State.activeToken.status === 'REVOKED') {
+        sound.playSirenAlarm();
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse";
+        bannerIcon.className = "fa-solid fa-ban text-base text-rose-400";
+        bannerText.innerText = "SECURITY ALERT: Token REVOKED by resident! Gate locked.";
+        logAck(`[SECURITY ALERT] Revoked OTP attempted at ${currentVerifierContext.wing}`);
+        return;
+      }
+
+      if (enteredOtp !== State.activeToken.otp) {
+        sound.playBuzzerDenied();
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-rose-500/20 text-rose-300 border border-rose-500/40";
+        bannerIcon.className = "fa-solid fa-circle-xmark text-base text-rose-400";
+        bannerText.innerText = "INVALID OTP: Authentication code does not match active pass.";
+        return;
+      }
+
+      // Checkpoint 2 (Wing Misdirection Verification)
+      if (currentVerifierContext.mode === 'WING_LOBBY') {
+        if (currentVerifierContext.wing !== State.activeToken.wing) {
+          sound.playBuzzerDenied();
+          banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-amber-500/20 text-amber-300 border border-amber-500/40";
+          bannerIcon.className = "fa-solid fa-triangle-exclamation text-base text-amber-400";
+          bannerText.innerText = `WRONG WING! Token authorized for ${State.activeToken.wing}. Gate stays locked.`;
+
+          if (navBanner) navBanner.classList.remove('hidden');
+          if (navStep) navStep.innerText = "MISDIRECTION DETECTED";
+          if (navMessage) navMessage.innerText = `You entered wrong wing. Backtrack to ${State.activeToken.wing}.`;
+          logAck(`[MISDIRECTION] Visitor at ${currentVerifierContext.wing} rejected; belongs to ${State.activeToken.wing}`);
+          return;
+        }
+
+        // Correct Wing: Unlock Lobby Barrier
+        sound.playChimeSuccess();
+        State.activeToken.status = 'IN_TRANSIT';
+        updateBadgeUI();
+
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+        bannerIcon.className = "fa-solid fa-circle-check text-base text-emerald-400";
+        bannerText.innerText = `AUTHENTICATED! Lobby gate open. Proceed to ${State.activeToken.flat}.`;
+
+        if (wingGateNodes[currentVerifierContext.wing]) {
+          wingGateNodes[currentVerifierContext.wing].isOpen = true;
+          setTimeout(() => {
+            if (wingGateNodes[currentVerifierContext.wing]) {
+              wingGateNodes[currentVerifierContext.wing].isOpen = false;
+            }
+          }, 8000);
+        }
+
+        logAck(`[NODE 02: ${currentVerifierContext.wing}] Access GRANTED. Moving to ${State.activeToken.flat}`);
+
+        if (navBanner) navBanner.classList.remove('hidden');
+        if (navStep) navStep.innerText = `WAYPOINT 03 • TARGET: ${State.activeToken.flat.toUpperCase()}`;
+        if (navMessage) navMessage.innerText = `Lobby unlocked. Walk to ${State.activeToken.flat} doorstep.`;
+        setTimeout(closeAllModals, 1400);
+      }
+      else if (currentVerifierContext.mode === 'DOORSTEP') {
+        // Checkpoint 3 (Flat Doorstep Verification)
+        if (currentVerifierContext.flat !== State.activeToken.flat || currentVerifierContext.wing !== State.activeToken.wing) {
+          sound.playBuzzerDenied();
+          banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-amber-500/20 text-amber-300 border border-amber-500/40";
+          bannerIcon.className = "fa-solid fa-triangle-exclamation text-base text-amber-400";
+          bannerText.innerText = `WRONG RESIDENCE! Destination pass is for ${State.activeToken.wing} - ${State.activeToken.flat}.`;
+          return;
+        }
+
+        // Successfully reached target flat
+        sound.playChimeSuccess();
+        State.activeToken.status = 'COMPLETED';
+        updateBadgeUI();
+
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-blue-500/20 text-blue-300 border border-blue-500/40";
+        bannerIcon.className = "fa-solid fa-bell text-base text-blue-400";
+        bannerText.innerText = `TRANSIT COMPLETE! Calling bell sounded at ${State.activeToken.flat}. OTP burned.`;
+
+        logAck(`[NODE 03: ${State.activeToken.flat}] Handshake confirmed. Transit CLOSED-LOOP.`);
+
+        if (navBanner) navBanner.classList.remove('hidden');
+        if (navStep) navStep.innerText = "TRANSIT COMPLETED (CLOSED LOOP)";
+        if (navMessage) navMessage.innerText = `You have reached ${State.activeToken.flat}. Push-to-exit switch available.`;
+        setTimeout(closeAllModals, 1800);
+      }
+    }
+
+    document.getElementById('btn-verify-submit').addEventListener('click', () => {
+      const code = otpInputField.value.trim();
+      if (code.length < 4) {
+        sound.playBuzzerDenied();
+        const banner = document.getElementById('verifier-result-banner');
+        banner.classList.remove('hidden');
+        banner.className = "p-3 rounded-xl text-xs font-mono flex items-center gap-2.5 bg-rose-500/20 text-rose-300 border border-rose-500/40";
+        document.getElementById('verifier-banner-icon').className = "fa-solid fa-circle-exclamation text-base text-rose-400";
+        document.getElementById('verifier-banner-text').innerText = "Please enter all 4 digits of the OTP.";
+        return;
+      }
+      evaluateVerification(code);
+    });
+
+    // Robust Voice Recognition Engine (Continuous Listening + Natural Number Parsing)
+    let recognitionInstance = null;
+    let voiceSessionTimer = null;
+    let voiceCountdownInterval = null;
+    let isVoiceSessionActive = false;
+    let accumulatedTranscript = '';
+    let finalCodeCaptured = '';
+
+    function parseSpokenTextToDigits(rawText) {
+      if (!rawText) return '';
+      // Clean and normalize text
+      const cleanText = rawText.toLowerCase().replace(/[-_,.]/g, ' ');
+      const tokens = cleanText.split(/\s+/).filter(Boolean);
+
+      const digitMap = {
+        'zero': '0', 'oh': '0', 'o': '0', 'nil': '0',
+        'one': '1', 'won': '1',
+        'two': '2', 'to': '2', 'too': '2',
+        'three': '3', 'tree': '3',
+        'four': '4', 'for': '4', 'fore': '4',
+        'five': '5',
+        'six': '6',
+        'seven': '7',
+        'eight': '8', 'ate': '8',
+        'nine': '9', 'niner': '9'
+      };
+
+      const teensAndTens = {
+        'ten': '10', 'eleven': '11', 'twelve': '12', 'thirteen': '13',
+        'fourteen': '14', 'fifteen': '15', 'sixteen': '16', 'seventeen': '17',
+        'eighteen': '18', 'nineteen': '19', 'twenty': '20', 'thirty': '30',
+        'forty': '40', 'fourty': '40', 'fifty': '50', 'sixty': '60',
+        'seventy': '70', 'eighty': '80', 'ninety': '90'
+      };
+
+      let digitsCollected = '';
+
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+
+        // 1. Direct digit string (e.g. "4", "4821")
+        if (/^\d+$/.test(token)) {
+          digitsCollected += token;
+          continue;
+        }
+
+        // 2. Multiplier words: "double 4" -> "44", "triple 7" -> "777"
+        if ((token === 'double' || token === 'twice') && i + 1 < tokens.length) {
+          const next = tokens[i + 1];
+          const val = digitMap[next] || (/^\d$/.test(next) ? next : null);
+          if (val) {
+            digitsCollected += val + val;
+            i++;
+            continue;
+          }
+        }
+        if (token === 'triple' && i + 1 < tokens.length) {
+          const next = tokens[i + 1];
+          const val = digitMap[next] || (/^\d$/.test(next) ? next : null);
+          if (val) {
+            digitsCollected += val + val + val;
+            i++;
+            continue;
+          }
+        }
+
+        // 3. Single digit words ("four" -> "4")
+        if (digitMap[token] !== undefined) {
+          digitsCollected += digitMap[token];
+          continue;
+        }
+
+        // 4. Tens / compound numbers ("twenty" -> "20")
+        if (teensAndTens[token]) {
+          digitsCollected += teensAndTens[token];
+          continue;
+        }
+      }
+
+      return digitsCollected;
+    }
+
+    const btnVoiceOtp = document.getElementById('btn-voice-otp');
+    const micBtnIcon = document.getElementById('mic-btn-icon');
+    const micBtnText = document.getElementById('mic-btn-text');
+    const micIndicatorIcon = document.getElementById('mic-indicator-icon');
+    const feedback = document.getElementById('voice-status-feedback');
+
+    function resetVoiceButtonState() {
+      isVoiceSessionActive = false;
+      if (voiceSessionTimer) { clearTimeout(voiceSessionTimer); voiceSessionTimer = null; }
+      if (voiceCountdownInterval) { clearInterval(voiceCountdownInterval); voiceCountdownInterval = null; }
+
+      if (btnVoiceOtp) {
+        btnVoiceOtp.className = "py-1 px-3 rounded-lg text-xs font-mono font-bold bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/40 flex items-center gap-1.5 transition";
+      }
+      if (micBtnText) micBtnText.innerText = "Speak OTP";
+      if (micBtnIcon) micBtnIcon.className = "fa-solid fa-microphone text-[11px]";
+      if (micIndicatorIcon) micIndicatorIcon.className = "fa-solid fa-microphone-lines text-sky-400";
+    }
+
+    function stopVoiceRecognitionGracefully() {
+      isVoiceSessionActive = false;
+      if (voiceSessionTimer) { clearTimeout(voiceSessionTimer); voiceSessionTimer = null; }
+      if (voiceCountdownInterval) { clearInterval(voiceCountdownInterval); voiceCountdownInterval = null; }
+
+      if (recognitionInstance) {
+        try { recognitionInstance.stop(); } catch(e) {}
+      }
+      resetVoiceButtonState();
+    }
+
+    function triggerAutoVerification(fourDigitCode) {
+      if (!fourDigitCode || fourDigitCode.length < 4) return;
+      const code = fourDigitCode.slice(0, 4);
+      otpInputField.value = code;
+      document.getElementById('otp-char-count').innerText = "4/4";
+      feedback.innerHTML = `✅ <span class="text-emerald-300 font-bold font-mono text-sm">Identified [${code}]! Authenticating...</span>`;
+      sound.playChimeSuccess();
+
+      // Trigger automatic verification directly without requiring any button click
+      setTimeout(() => {
+        evaluateVerification(code);
+      }, 350);
+    }
+
+    function initAndStartSpeechRecognizer() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return null;
+
+      const recognizer = new SpeechRecognition();
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
+      recognizer.lang = 'en-US';
+      recognizer.maxAlternatives = 3;
+
+      recognizer.onresult = (event) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const res = event.results[i];
+          const text = res[0].transcript;
+          if (res.isFinal) {
+            accumulatedTranscript += ' ' + text;
+          } else {
+            interimTranscript += ' ' + text;
+          }
+        }
+
+        const combinedSpeech = (accumulatedTranscript + ' ' + interimTranscript).trim();
+        const extractedDigits = parseSpokenTextToDigits(combinedSpeech);
+
+        if (extractedDigits) {
+          otpInputField.value = extractedDigits.slice(0, 4);
+          document.getElementById('otp-char-count').innerText = `${Math.min(extractedDigits.length, 4)}/4`;
+          feedback.innerHTML = `Heard: <i class="text-slate-300">"${combinedSpeech}"</i> → <b class="text-sky-300 font-mono text-sm">[${extractedDigits}]</b>`;
+        } else if (combinedSpeech) {
+          feedback.innerHTML = `Listening: <i class="text-slate-300">"${combinedSpeech}"</i>...`;
+        }
+
+        // AUTO-COMPLETE: As soon as 4 digits are accumulated, trigger verification immediately!
+        if (extractedDigits.length >= 4) {
+          finalCodeCaptured = extractedDigits.slice(0, 4);
+          stopVoiceRecognitionGracefully();
+          triggerAutoVerification(finalCodeCaptured);
+        }
+      };
+
+      recognizer.onerror = (e) => {
+        if (e.error === 'no-speech') return;
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          stopVoiceRecognitionGracefully();
+          feedback.innerHTML = '<span class="text-rose-400 font-bold">Microphone permission denied.</span> Please allow mic or use keypad.';
+        }
+      };
+
+      recognizer.onend = () => {
+        // If 6-second window is still running and code not yet complete, seamlessly restart
+        if (isVoiceSessionActive && !finalCodeCaptured) {
+          try {
+            recognizer.start();
+          } catch(err) {}
+        } else if (!isVoiceSessionActive) {
+          resetVoiceButtonState();
+        }
+      };
+
+      return recognizer;
+    }
+
+    if (btnVoiceOtp) {
+      btnVoiceOtp.addEventListener('click', async () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+          feedback.innerHTML = '<span class="text-rose-400 font-bold">Speech API not supported in this browser.</span> Use the numeric keypad.';
+          return;
+        }
+
+        // Clicking while active immediately stops and verifies whatever was heard
+        if (isVoiceSessionActive) {
+          const currentDigits = parseSpokenTextToDigits(accumulatedTranscript) || otpInputField.value.trim();
+          stopVoiceRecognitionGracefully();
+          if (currentDigits.length >= 4) {
+            triggerAutoVerification(currentDigits.slice(0, 4));
+          } else {
+            feedback.innerHTML = 'Mic stopped. Click <b>Speak OTP</b> to try again, or use the keypad.';
+          }
+          return;
+        }
+
+        // Request audio device access
+        try {
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+          }
+        } catch (e) {}
+
+        sound.init();
+        accumulatedTranscript = '';
+        finalCodeCaptured = '';
+        isVoiceSessionActive = true;
+        otpInputField.value = '';
+        document.getElementById('otp-char-count').innerText = "0/4";
+
+        if (!recognitionInstance) {
+          recognitionInstance = initAndStartSpeechRecognizer();
+        }
+
+        let secondsRemaining = 6;
+        btnVoiceOtp.className = "py-1 px-3 rounded-lg text-xs font-mono font-bold bg-rose-600/40 text-rose-200 border border-rose-500/80 flex items-center gap-1.5 animate-pulse";
+        micBtnText.innerText = `Listening (${secondsRemaining}s)...`;
+        micBtnIcon.className = "fa-solid fa-circle-dot text-[11px] text-rose-400 animate-ping";
+        micIndicatorIcon.className = "fa-solid fa-waveform-lines text-rose-400 animate-pulse";
+        feedback.innerHTML = `<span class="text-sky-300 font-bold">Mic active for ${secondsRemaining}s:</span> Speak your 4 numbers clearly (e.g. "4 8 2 1").`;
+
+        voiceCountdownInterval = setInterval(() => {
+          secondsRemaining--;
+          if (secondsRemaining > 0 && isVoiceSessionActive) {
+            micBtnText.innerText = `Listening (${secondsRemaining}s)...`;
+            feedback.innerHTML = `<span class="text-sky-300 font-bold">Listening (${secondsRemaining}s):</span> Say numbers one by one...`;
+          } else {
+            clearInterval(voiceCountdownInterval);
+          }
+        }, 1000);
+
+        // Max window timeout
+        voiceSessionTimer = setTimeout(() => {
+          if (isVoiceSessionActive) {
+            const captured = finalCodeCaptured || parseSpokenTextToDigits(accumulatedTranscript) || otpInputField.value.trim();
+            stopVoiceRecognitionGracefully();
+
+            if (captured.length >= 4) {
+              triggerAutoVerification(captured.slice(0, 4));
+            } else if (captured.length > 0) {
+              feedback.innerHTML = `⚠️ <span class="text-amber-300 font-mono">Captured ${captured.length}/4 digits ([${captured}]). Speak again or complete via keypad.</span>`;
+            } else {
+              feedback.innerHTML = 'No numbers detected. Click <b>Speak OTP</b> to retry, or use keypad.';
+            }
+          }
+        }, 6500);
+
+        try {
+          recognitionInstance.start();
+        } catch (err) {}
+      });
+    }
+
+    /* -------------------------------------------------------------
+       ROUND 2 TWIST DEMONSTRATOR LOGIC
+       ------------------------------------------------------------- */
+    function logAck(msg) {
+      const time = new Date().toTimeString().split(' ')[0];
+      const entry = document.createElement('div');
+      entry.innerHTML = "<span class=\"text-sky-400\">[" + time + "]</span> " + msg;
+      ackLogFeed.appendChild(entry);
+      ackLogFeed.scrollTop = ackLogFeed.scrollHeight;
+    }
+
+    // Instant Access Revocation with Multi-Node ACKs
+    function executeInstantRevocation() {
+      if (!State.activeToken) {
+        logAck("[WARN] No active visitor pass to revoke. Check in at Main Gate first.");
+        return;
+      }
+
+      State.activeToken.status = 'REVOKED';
+      updateBadgeUI();
+      sound.playSirenAlarm();
+
+      logAck("🚨 <b class=\"text-rose-400\">REVOCATION BROADCAST TRIGGERED:</b> Kill-switch for OTP " + State.activeToken.otp);
+
+      // Simulated Multi-Node ACK Messaging Protocol
+      setTimeout(function() {
+        logAck("↳ [ACK 1/4] NODE_01 (Perimeter Gate): Blacklist synced.");
+      }, 120);
+      setTimeout(function() {
+        logAck("↳ [ACK 2/4] NODE_02 (Wing Alpha Gate): Blacklist synced.");
+      }, 260);
+      setTimeout(function() {
+        logAck("↳ [ACK 3/4] NODE_03 (Wing Beta Gate): Blacklist synced.");
+      }, 390);
+      setTimeout(function() {
+        logAck("↳ [ACK 4/4] NODE_04 (Wing Gamma Gate): Blacklist synced.");
+        logAck("✅ <b class=\"text-emerald-400\">ACK 100% CONFIRMED:</b> Credential invalidated across all physical controllers.");
+      }, 520);
+    }
+
+    document.getElementById('btn-broadcast-revoke').addEventListener('click', executeInstantRevocation);
+    document.getElementById('btn-quick-revoke').addEventListener('click', executeInstantRevocation);
+
+    // Heartbeat Failure / Sensor Cut Simulator
+    const btnToggleFailure = document.getElementById('btn-toggle-failure');
+    const btnToggleFailureText = document.getElementById('btn-toggle-failure-text');
+    const statusNode3 = document.getElementById('status-node-3');
+
+    btnToggleFailure.addEventListener('click', function() {
+      State.isBetaNodeFailing = !State.isBetaNodeFailing;
+
+      if (State.isBetaNodeFailing) {
+        btnToggleFailureText.innerText = "RESTORE WING BETA SENSOR";
+        statusNode3.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i>FAULT / OFFLINE';
+        statusNode3.className = "text-rose-400 font-bold text-[11px] animate-pulse";
+        sound.playSirenAlarm();
+        logAck("⚠️ <b class=\"text-amber-400\">HEARTBEAT MISSED:</b> Node 03 (Wing Beta) unresponsive > 3.0s.");
+        logAck("↳ <b class=\"text-sky-300\">FAIL-SAFE ENGAGED:</b> Wing Beta lobby locked for inbound; emergency egress switch 100% active.");
+      } else {
+        btnToggleFailureText.innerText = "SIMULATE WING BETA SENSOR CUT";
+        statusNode3.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i>ONLINE';
+        statusNode3.className = "text-emerald-400 font-bold text-[11px]";
+        sound.playChimeSuccess();
+        logAck("✅ [HEARTBEAT RESTORED] Node 03 (Wing Beta) re-established handshake.");
+      }
+    });
+
+    // Periodic Heartbeat Pulse (Runs every 2.5s)
+    setInterval(function() {
+      if (!State.isBetaNodeFailing) {
+        // keep heartbeat alive
+      }
+    }, 2500);
+
+    /* -------------------------------------------------------------
+       MAIN GAME ANIMATION LOOP
+       ------------------------------------------------------------- */
+    const clock = new THREE.Clock();
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.1);
+
+      // 1. Update Player Movement Kinematics
+      if (!isModalOpen()) {
+        direction.z = Number(keys.forward) - Number(keys.backward);
+        direction.x = Number(keys.left) - Number(keys.right);
+        direction.normalize();
+
+        const moveSpeed = keys.shift ? 12.0 : 6.0;
+
+        // Apply friction
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+
+        if (keys.forward || keys.backward) velocity.z -= direction.z * moveSpeed * 8.0 * delta;
+        if (keys.left || keys.right) velocity.x -= direction.x * moveSpeed * 8.0 * delta;
+
+        // Calculate world movement vectors aligned to camera yaw
+        const forwardVector = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), euler.y);
+        const sideVector = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), euler.y);
+
+        const deltaX = (forwardVector.x * -velocity.z + sideVector.x * velocity.x) * delta;
+        const deltaZ = (forwardVector.z * -velocity.z + sideVector.z * velocity.x) * delta;
+
+        const newX = camera.position.x + deltaX;
+        const newZ = camera.position.z + deltaZ;
+
+        // Independent Axis AABB Collisions
+        if (!checkCollision(newX, camera.position.z)) {
+          camera.position.x = newX;
+        }
+        if (!checkCollision(camera.position.x, newZ)) {
+          camera.position.z = newZ;
+        }
+
+        // Adjust camera elevation based on stairs and upper floor landing
+        let targetY = 1.7; // Standard ground walking eye-level
+        wingsData.forEach(function(w) {
+          // Check if player is inside the building bounds
+          if (camera.position.x > w.x - 7.0 && camera.position.x < w.x + 7.0 &&
+              camera.position.z > w.z - 7.0 && camera.position.z < w.z + 7.0) {
+            // Check if player is on the upper landing (behind stairs)
+            if (camera.position.z <= w.z + 0.5) {
+              targetY = 4.1; // 2.4m floor + 1.7m eye-level
+            } else if (camera.position.x < w.x - 2.5 && camera.position.z <= w.z + 4.5) {
+              // On staircase slope
+              const progress = ( (w.z + 4.5) - camera.position.z ) / (8 * 0.55);
+              const clampedProgress = Math.max(0, Math.min(1, progress));
+              targetY = 1.7 + clampedProgress * 2.4;
+            }
+          }
+        });
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, delta * 8.0);
+
+        // Catch unauthorized trespassers who try to teleport or force-run through the barrier while closed
+        if (!mainGateController.isOpen && camera.position.z < 10.0 && camera.position.z > 7.0 && Math.abs(camera.position.x) < 4.5) {
+          triggerPerimeterBreachAlarm();
+          camera.position.z = 10.8;
+        }
+
+        camera.position.x = Math.max(-45, Math.min(45, camera.position.x));
+        camera.position.z = Math.max(-125, Math.min(30, camera.position.z));
+      }
+
+      // 2. Animate Motorized Interlock Gates
+      mainGateController.update(delta);
+      Object.values(wingGateNodes).forEach(node => node.update(delta));
+
+      // 3. Strict Proximity Detection (Only trigger when distance <= 2.8m)
+      let nearestTarget = null;
+      let minDistance = 2.8;
+
+      interactiveObjects.forEach(obj => {
+        const dist = camera.position.distanceTo(obj.position);
+        if (dist < minDistance) {
+          nearestTarget = obj;
+          minDistance = dist;
+        }
+      });
+
+      State.currentInteractiveTarget = nearestTarget;
+
+      // Show [E] prompt ONLY when physically standing right next to the node
+      if (nearestTarget && !isModalOpen()) {
+        promptEl.classList.remove('hidden');
+        promptTextEl.innerHTML = nearestTarget.promptText;
+        crosshairEl.classList.add('active-target');
+      } else {
+        promptEl.classList.add('hidden');
+        crosshairEl.classList.remove('active-target');
+      }
+
+      // 4. Render Scene
+      renderer.render(scene, camera);
+    }
+
+    // Window Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start Simulation on Window Load
+    window.onload = function() {
+      animate();
+    };
+  </script>
+</body>
+</html>
